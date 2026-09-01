@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# Environment Variables
+.env
+.env.local
+
+# Databases & Data
+*.sqlite
+*.sqlite3
+*.db
+data/generated/*
+!data/generated/.gitkeep
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+frontend/dist/
+frontend/build/
+.pnpm-debug.log*
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Operating System
+.DS_Store
+Thumbs.db

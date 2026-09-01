@@ -1,0 +1,11 @@
+export interface HealthStatusResponse {
+  status: string;
+  service: string;
+}
+
+export interface ApiError {
+  error: string;
+  message: string;
+  details?: Record<string, unknown>;
+  path?: string;
+}
