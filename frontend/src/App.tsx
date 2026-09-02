@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HealthPage } from './pages/HealthPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 
 const ArchitectureDocs: React.FC = () => (
   <div className="glass-card" style={{ padding: '32px' }}>
@@ -29,7 +30,9 @@ export const App: React.FC = () => {
         <Header />
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<HealthPage />} />
+            <Route path="/" element={<AnalyticsPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/health" element={<HealthPage />} />
             <Route path="/docs/architecture" element={<ArchitectureDocs />} />
             <Route path="/docs/roadmap" element={<RoadmapDocs />} />
           </Routes>

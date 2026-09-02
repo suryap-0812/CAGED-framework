@@ -8,6 +8,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.health import router as health_router
 from app.config import settings
 from app.core.exceptions import CAGEDException, caged_exception_handler
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
 
     # Include API Routers
     app.include_router(health_router)
+    app.include_router(dashboard_router)
 
     return app
 
