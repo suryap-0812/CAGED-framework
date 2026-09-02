@@ -3,7 +3,6 @@ Unit Tests for Pre-Policy Baseline Freezing & Counterfactual Isolation.
 """
 
 from datetime import datetime, timezone
-# pyrefly: ignore [missing-import]
 import numpy as np
 import pytest
 
