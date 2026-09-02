@@ -10,6 +10,8 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from app.ingestion.models import EngagementEvent, MetricType
+from app.policy.models import PolicyEvent
+from app.policy.registry import PolicyTimeline
 from app.preprocessing.validator import EventValidator
 from app.simulation.user_profile import (
     UserProfile,
@@ -53,8 +55,9 @@ class EventGeneratorConfig(BaseModel):
 class EventGenerator:
     """Core simulation engine generating privacy-safe engagement events."""
 
-    def __init__(self, config: EventGeneratorConfig):
+    def __init__(self, config: EventGeneratorConfig, timeline: Optional[PolicyTimeline] = None):
         self.config = config
+        self.timeline = timeline or PolicyTimeline()
         self.py_rng = random.Random(config.seed)
         self.np_rng = np.random.default_rng(config.seed)
         self.users: List[UserProfile] = []
@@ -65,7 +68,6 @@ class EventGenerator:
         total_users = self.config.num_users
         proportions = self.config.segment_proportions
         
-        # Calculate counts per segment
         counts: Dict[UserSegment, int] = {}
         allocated = 0
         segments = list(proportions.keys())
@@ -76,7 +78,6 @@ class EventGenerator:
             allocated += c
         counts[segments[-1]] = max(0, total_users - allocated)
 
-        # Build user objects
         user_idx = 0
         for seg, count in counts.items():
             for _ in range(count):
@@ -89,7 +90,6 @@ class EventGenerator:
                 self.users.append(u)
                 user_idx += 1
 
-        # Precompute user selection probability weights
         self.user_weights = np.array([u.activity_weight for u in self.users], dtype=np.float64)
         self.user_weights /= self.user_weights.sum()
 
@@ -98,35 +98,52 @@ class EventGenerator:
         Calculates time offset (in seconds) introducing a diurnal (day/night) sinusoidal activity pattern.
         """
         total_duration_sec = self.config.duration_hours * 3600.0
-        # Non-uniform time distribution using cumulative distribution function sampling
         u = (event_index + self.np_rng.uniform(0, 1)) / float(total_events)
         
-        # Superimpose sinusoidal diurnal variation (peak at 14:00, trough at 04:00)
-        # Base uniform progression + sinusoidal shift
         base_sec = u * total_duration_sec
         hour_of_day = (base_sec / 3600.0) % 24.0
         
-        # Sinusoidal modifier: higher event density during peak hours
         diurnal_factor = 0.3 * math.sin((hour_of_day - 8.0) * math.pi / 12.0)
         adjusted_sec = max(0.0, min(total_duration_sec, base_sec + diurnal_factor * 1800.0))
         
         return adjusted_sec
 
-    def generate_events(self, policy_state: str = "pre_policy") -> List[EngagementEvent]:
+    def _apply_policy_impacts(
+        self, user: UserProfile, metric: MetricType, category: str, evt_time: datetime
+    ) -> tuple[float, str]:
+        """
+        Evaluates active policy events at evt_time and calculates net impact multiplier and policy_state tag.
+        """
+        active_policies = self.timeline.get_active_policies_at(evt_time)
+        if not active_policies:
+            return 1.0, "pre_policy"
+
+        net_multiplier = 1.0
+        active_policy_ids = []
+
+        for p in active_policies:
+            # Check targeting criteria
+            if p.target_metric and metric != p.target_metric:
+                continue
+            if p.target_segment and user.segment != p.target_segment:
+                continue
+            if p.target_category and category != p.target_category:
+                continue
+            
+            net_multiplier *= p.impact_factor
+            active_policy_ids.append(p.policy_id)
+
+        policy_state_tag = ",".join(active_policy_ids) if active_policy_ids else "post_policy"
+        return net_multiplier, policy_state_tag
+
+    def generate_events(self) -> List[EngagementEvent]:
         """
         Generates deterministic stream of validated EngagementEvent objects.
-        
-        Args:
-            policy_state: Operational policy flag ("pre_policy" or "post_policy").
-            
-        Returns:
-            List of valid EngagementEvent instances sorted by timestamp.
         """
         events: List[EngagementEvent] = []
         total_events = self.config.num_events
         start_time = self.config.start_time
 
-        # Sample user selections in bulk
         selected_user_indices = self.np_rng.choice(
             len(self.users), size=total_events, p=self.user_weights
         )
@@ -134,29 +151,36 @@ class EventGenerator:
         for i in range(total_events):
             user = self.users[selected_user_indices[i]]
             
-            # Select metric based on user's metric weights
             metric_types = list(user.metric_weights.keys())
             metric_probs = list(user.metric_weights.values())
             selected_metric_str = self.py_rng.choices(metric_types, weights=metric_probs, k=1)[0]
             metric_enum = MetricType(selected_metric_str)
 
-            # Assign realistic metric value
             if metric_enum == MetricType.SESSION_DURATION:
-                # Log-normal distribution for session duration (e.g. 30s to 1200s)
                 val = float(round(self.np_rng.lognormal(mean=4.5, sigma=0.8), 2))
                 val = max(5.0, val)
             else:
                 val = 1.0
 
-            # Select content category (prefer user's favorite categories 80% of the time)
             if user.preferred_categories and self.py_rng.random() < 0.8:
                 cat = self.py_rng.choice(user.preferred_categories)
             else:
                 cat = self.py_rng.choice(self.config.categories)
 
-            # Compute timestamp with diurnal shift
             offset_sec = self._diurnal_time_shift(i, total_events)
             evt_time = start_time + timedelta(seconds=offset_sec)
+
+            # Evaluate Policy Impacts
+            impact_multiplier, policy_state_tag = self._apply_policy_impacts(
+                user=user, metric=metric_enum, category=cat, evt_time=evt_time
+            )
+
+            # Apply policy degradation / modifier to event value
+            # If stochastic drop applied (e.g. 20% drop), skip event with probability (1 - impact_multiplier) if impact < 1
+            if impact_multiplier < 1.0 and self.py_rng.random() > impact_multiplier:
+                continue  # Event suppressed due to policy degradation!
+
+            val = val * (impact_multiplier if impact_multiplier >= 1.0 else 1.0)
 
             raw_dict = {
                 "event_id": f"evt_{i+1:08d}",
@@ -168,13 +192,11 @@ class EventGenerator:
                 "segment_metadata": {
                     "user_segment": user.segment.value,
                 },
-                "policy_state": policy_state,
+                "policy_state": policy_state_tag,
             }
 
-            # Enforce strict privacy and schema validation
             event = EventValidator.validate_and_parse(raw_dict)
             events.append(event)
 
-        # Sort events by timestamp to ensure chronological stream ordering
         events.sort(key=lambda e: e.timestamp)
         return events

@@ -79,7 +79,7 @@ def main():
         print(f"    - {seg:<15}: {count:,} users ({count/len(generator.users)*100:.1f}%)")
 
     print("[*] Generating event stream...")
-    events = generator.generate_events(policy_state="pre_policy")
+    events = generator.generate_events()
     print(f"[+] Successfully generated {len(events):,} validated events.")
 
     # Create output directory if it doesn't exist

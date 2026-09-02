@@ -364,7 +364,7 @@ Initial metrics:
 Implement the project in exactly the following major phases.
 
 ------------------------------------------------------------
-PHASE 0 — REPOSITORY AUDIT + TECHNICAL DESIGN
+## PHASE 0 — REPOSITORY AUDIT + TECHNICAL DESIGN
 ------------------------------------------------------------
 
 Goal:
@@ -401,7 +401,7 @@ Validation:
 STOP.
 
 ------------------------------------------------------------
-PHASE 1 — PROJECT FOUNDATION
+## PHASE 1 — PROJECT FOUNDATION
 ------------------------------------------------------------
 
 Goal:
@@ -451,7 +451,7 @@ Tests:
 STOP.
 
 ------------------------------------------------------------
-PHASE 2 — PRIVACY-SAFE EVENT MODEL
+## PHASE 2 — PRIVACY-SAFE EVENT MODEL
 ------------------------------------------------------------
 
 Goal:
@@ -491,7 +491,7 @@ Explain:
 STOP.
 
 ------------------------------------------------------------
-PHASE 3 — SYNTHETIC SOCIAL PLATFORM EVENT GENERATOR
+## PHASE 3 — SYNTHETIC SOCIAL PLATFORM EVENT GENERATOR
 ------------------------------------------------------------
 
 Goal:
@@ -550,7 +550,7 @@ Tests:
 STOP.
 
 ------------------------------------------------------------
-PHASE 4 — EVENT INGESTION + STREAM PROCESSING
+## PHASE 4 — EVENT INGESTION + STREAM PROCESSING
 ------------------------------------------------------------
 
 Goal:
@@ -586,7 +586,7 @@ Tests:
 STOP.
 
 ------------------------------------------------------------
-PHASE 5 — METRIC ENGINE
+## PHASE 5 — METRIC ENGINE
 ------------------------------------------------------------
 
 Goal:
@@ -635,7 +635,7 @@ Tests:
 STOP.
 
 ------------------------------------------------------------
-PHASE 6 — COUNT-MIN SKETCH
+## PHASE 6 — COUNT-MIN SKETCH
 ------------------------------------------------------------
 
 Goal:
@@ -675,7 +675,7 @@ experiments/evaluation/sketch_accuracy.py
 STOP.
 
 ------------------------------------------------------------
-PHASE 7 — HYPERLOGLOG
+## PHASE 7 — HYPERLOGLOG
 ------------------------------------------------------------
 
 Goal:
@@ -701,7 +701,7 @@ Clearly explain why HyperLogLog is used.
 STOP.
 
 ------------------------------------------------------------
-PHASE 8 — ADAPTIVE BASELINE ENGINE
+## PHASE 8 — ADAPTIVE BASELINE ENGINE
 ------------------------------------------------------------
 
 Goal:
@@ -754,7 +754,7 @@ Measure prediction error.
 STOP.
 
 ------------------------------------------------------------
-PHASE 9 — POLICY EVENT SYSTEM
+## PHASE 9 — POLICY EVENT SYSTEM
 ------------------------------------------------------------
 
 Goal:
@@ -803,7 +803,7 @@ CAGED must independently measure the resulting engagement change.
 STOP.
 
 ------------------------------------------------------------
-PHASE 10 — PRE-POLICY BASELINE FREEZING
+## PHASE 10 — PRE-POLICY BASELINE FREEZING
 ------------------------------------------------------------
 
 Goal:
@@ -839,7 +839,7 @@ Tests:
 STOP.
 
 ------------------------------------------------------------
-PHASE 11 — STATISTICAL DEGRADATION DETECTOR
+## PHASE 11 — STATISTICAL DEGRADATION DETECTOR
 ------------------------------------------------------------
 
 Goal:
@@ -878,7 +878,7 @@ Tests must include:
 STOP.
 
 ------------------------------------------------------------
-PHASE 12 — MULTI-METRIC DEGRADATION SCORE
+## PHASE 12 — MULTI-METRIC DEGRADATION SCORE
 ------------------------------------------------------------
 
 Goal:
@@ -920,7 +920,7 @@ The detector should identify which metrics contributed most.
 STOP.
 
 ------------------------------------------------------------
-PHASE 13 — FALSE-ALARM CONTROL
+## PHASE 13 — FALSE-ALARM CONTROL
 ------------------------------------------------------------
 
 Goal:
@@ -950,7 +950,7 @@ Create experiments measuring:
 STOP.
 
 ------------------------------------------------------------
-PHASE 14 — STREAMING USER SEGMENTATION
+## PHASE 14 — STREAMING USER SEGMENTATION
 ------------------------------------------------------------
 
 Goal:
@@ -987,7 +987,7 @@ cluster engagement metrics
 STOP.
 
 ------------------------------------------------------------
-PHASE 15 — SEGMENT-LEVEL DEGRADATION
+## PHASE 15 — SEGMENT-LEVEL DEGRADATION
 ------------------------------------------------------------
 
 Goal:
@@ -1019,7 +1019,7 @@ The system should identify:
 STOP.
 
 ------------------------------------------------------------
-PHASE 16 — CAUSAL ANALYSIS EXTENSION
+## PHASE 16 — CAUSAL ANALYSIS EXTENSION
 ------------------------------------------------------------
 
 Goal:
@@ -1054,7 +1054,7 @@ Create a report section:
 STOP.
 
 ------------------------------------------------------------
-PHASE 17 — MACHINE LEARNING EXTENSION
+## PHASE 17 — MACHINE LEARNING EXTENSION
 ------------------------------------------------------------
 
 Goal:
@@ -1110,7 +1110,7 @@ The research question should be:
 STOP.
 
 ------------------------------------------------------------
-PHASE 18 — ALERT ENGINE
+## PHASE 18 — ALERT ENGINE
 ------------------------------------------------------------
 
 Goal:
@@ -1146,7 +1146,7 @@ Implement alert deduplication/cooldown.
 STOP.
 
 ------------------------------------------------------------
-PHASE 19 — REPORT ENGINE
+## PHASE 19 — REPORT ENGINE
 ------------------------------------------------------------
 
 Goal:
@@ -1201,7 +1201,7 @@ Reports must be reproducible from stored experiment results.
 STOP.
 
 ------------------------------------------------------------
-PHASE 20 — BACKEND API
+## PHASE 20 — BACKEND API
 ------------------------------------------------------------
 
 Goal:
@@ -1253,7 +1253,7 @@ Add API documentation.
 STOP.
 
 ------------------------------------------------------------
-PHASE 21 — DATABASE
+ ## PHASE 21 — DATABASE
 ------------------------------------------------------------
 
 Goal:
@@ -1290,7 +1290,7 @@ persistent analytical results
 STOP.
 
 ------------------------------------------------------------
-PHASE 22 — REAL-TIME DASHBOARD
+## PHASE 22 — REAL-TIME DASHBOARD
 ------------------------------------------------------------
 
 Goal:
@@ -1318,7 +1318,7 @@ Important visualization:
 
 Expected vs Actual
 
-```text
+
 Engagement
    |
    |      Expected ─────────────
@@ -1330,7 +1330,6 @@ Engagement
    +--------------------------> Time
                      ↑
                 Policy Change
-````
 
 Do not make the dashboard purely decorative.
 
