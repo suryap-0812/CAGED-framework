@@ -33,7 +33,8 @@ class ValidationException(CAGEDException):
     """Raised when input validation fails."""
 
     def __init__(self, message: str = "Invalid input parameters"):
-        super().__init__(message=message, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        super().__init__(message=message, status_code=422)
+
 
 
 async def caged_exception_handler(request: Request, exc: CAGEDException) -> JSONResponse:
