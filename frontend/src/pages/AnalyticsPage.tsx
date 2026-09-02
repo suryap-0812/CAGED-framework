@@ -4,6 +4,7 @@ import {
   Activity,
   Calendar,
   FileText,
+  Radio,
   RefreshCw,
   ShieldAlert,
   TrendingDown,
@@ -60,6 +61,7 @@ export const AnalyticsPage: React.FC = () => {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [segmentData, setSegmentData] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [sseConnected, setSseConnected] = useState<boolean>(false);
   const [activeMetric, setActiveMetric] = useState<'like' | 'comment' | 'share'>('like');
   const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
@@ -108,7 +110,7 @@ export const AnalyticsPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           policy_id: `P00${Math.floor(Math.random() * 89 + 10)}`,
-          policy_name: 'Stricter Privacy Filter',
+          policy_name: 'Strict Privacy Filter',
           impact_factor: 0.65,
           description: 'Simulated strict engagement filter change at T0',
         }),
@@ -123,8 +125,56 @@ export const AnalyticsPage: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 10000);
-    return () => clearInterval(interval);
+
+    // Server-Sent Events (SSE) Streaming Connection
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('http://localhost:8000/api/v1/dashboard/stream');
+
+      eventSource.onopen = () => {
+        setSseConnected(true);
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const sseData = JSON.parse(event.data);
+          if (sseData && sseData.composite_score !== undefined) {
+            setData((prev) => {
+              if (!prev) return prev;
+              const newTs = [...prev.time_series];
+              if (newTs.length > 0) {
+                const last = { ...newTs[newTs.length - 1] };
+                last.timestamp = sseData.timestamp;
+                last.like_observed = sseData.metrics.like.observed;
+                last.comment_observed = sseData.metrics.comment.observed;
+                last.share_observed = sseData.metrics.share.observed;
+                newTs[newTs.length - 1] = last;
+              }
+              return {
+                ...prev,
+                composite_score: sseData.composite_score,
+                is_degraded: sseData.is_degraded,
+                top_contributor: sseData.top_contributor,
+                time_series: newTs,
+              };
+            });
+          }
+        } catch (e) {
+          console.error('SSE JSON parse error:', e);
+        }
+      };
+
+      eventSource.onerror = () => {
+        setSseConnected(false);
+        eventSource?.close();
+      };
+    } catch (e) {
+      setSseConnected(false);
+    }
+
+    return () => {
+      eventSource?.close();
+    };
   }, []);
 
   if (loading && !data) {
@@ -145,11 +195,21 @@ export const AnalyticsPage: React.FC = () => {
       {/* Top Header */}
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <ShieldAlert className="h-7 w-7 text-cyan-400" />
             <h1 className="text-2xl font-bold tracking-tight text-white">
               CAGED <span className="text-xs font-semibold uppercase tracking-widest text-cyan-400">v1.0</span>
             </h1>
+            <span
+              className={`flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-bold uppercase tracking-wider ${
+                sseConnected
+                  ? 'border border-emerald-500/40 bg-emerald-950/60 text-emerald-300'
+                  : 'border border-amber-500/40 bg-amber-950/60 text-amber-300'
+              }`}
+            >
+              <Radio className={`h-3 w-3 ${sseConnected ? 'animate-pulse text-emerald-400' : 'text-amber-400'}`} />
+              {sseConnected ? 'LIVE STREAMING' : 'POLLING'}
+            </span>
           </div>
           <p className="mt-1 text-xs text-slate-400">
             Causal Analysis for Guaranteed Engagement Degradation — Real-Time Policy Monitoring

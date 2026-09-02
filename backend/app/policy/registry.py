@@ -43,6 +43,10 @@ class PolicyTimeline:
         """Adds a policy event to the timeline via registry."""
         self.registry.register_policy(policy)
 
+    def get_all_policy_events(self) -> List[PolicyEvent]:
+        """Returns all registered policy events sorted by timestamp."""
+        return self.registry.list_policies()
+
     def get_active_policies_at(self, timestamp: datetime) -> List[PolicyEvent]:
         """
         Returns all policies that took effect on or before timestamp.
