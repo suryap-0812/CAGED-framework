@@ -1,202 +1,307 @@
 """
-Synthetic Social Platform Event Generator Engine for CAGED.
+Refactored Synthetic Social Platform Event Generator for CAGED.
+Orchestrates ExperimentConfig, ContentCatalog, RecommendationEngine, and UserBehaviorModel.
+Emits parallel Treatment & Control streams while preserving SUTVA no-interference and Ground-Truth Firewall Isolation.
 """
 
 from datetime import datetime, timedelta, timezone
 import math
 import random
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
-from pydantic import BaseModel, Field
 
 from app.ingestion.models import EngagementEvent, MetricType
-from app.policy.models import PolicyEvent
-from app.policy.registry import PolicyTimeline
 from app.preprocessing.validator import EventValidator
+from app.simulation.content_catalog import ContentCatalog, ContentItem
+from app.simulation.experiment_config import (
+    ExperimentConfig,
+    ExternalDisturbanceType,
+    PolicyMechanism,
+    PolicyParameters,
+)
+from app.simulation.recommender import RecommendationEngine
+from app.simulation.user_behavior import UserBehaviorModel, UserBehaviorOutcome
 from app.simulation.user_profile import (
     UserProfile,
     UserSegment,
     create_synthetic_user_profile,
 )
 
-DEFAULT_CATEGORIES: List[str] = [
-    "education",
-    "news",
-    "gaming",
-    "lifestyle",
-    "technology",
-    "entertainment",
-]
-
-
-class EventGeneratorConfig(BaseModel):
-    """Configuration parameters for synthetic event generation."""
-
-    num_users: int = Field(default=1000, ge=1, description="Total synthetic users")
-    num_events: int = Field(default=10000, ge=1, description="Total events to generate")
-    seed: int = Field(default=42, description="Random seed for reproducibility")
-    start_time: datetime = Field(
-        default_factory=lambda: datetime(2026, 9, 1, 0, 0, 0, tzinfo=timezone.utc),
-        description="Stream start timestamp",
-    )
-    duration_hours: float = Field(default=24.0, gt=0.0, description="Time span duration in hours")
-    segment_proportions: Dict[UserSegment, float] = Field(
-        default_factory=lambda: {
-            UserSegment.CASUAL: 0.50,
-            UserSegment.REGULAR: 0.30,
-            UserSegment.HEAVY: 0.10,
-            UserSegment.CONTENT_FOCUSED: 0.10,
-        },
-        description="Segment population ratios",
-    )
-    categories: List[str] = Field(default_factory=lambda: DEFAULT_CATEGORIES.copy())
+# Backward-compatibility alias for legacy imports
+EventGeneratorConfig = ExperimentConfig
 
 
 class EventGenerator:
-    """Core simulation engine generating privacy-safe engagement events."""
+    """
+    Core simulation engine orchestrating production-style recommendation mechanisms,
+    user behavioral emergence, and treatment/control streams.
+    """
 
-    def __init__(self, config: EventGeneratorConfig, timeline: Optional[PolicyTimeline] = None):
-        self.config = config
-        self.timeline = timeline or PolicyTimeline()
-        self.py_rng = random.Random(config.seed)
-        self.np_rng = np.random.default_rng(config.seed)
+    def __init__(
+        self,
+        config: Optional[ExperimentConfig] = None,
+        timeline: Optional[Any] = None,  # Backward-compatibility parameter
+        catalog: Optional[ContentCatalog] = None,
+        recommender: Optional[RecommendationEngine] = None,
+        behavior_model: Optional[UserBehaviorModel] = None,
+    ):
+        self.config = config or ExperimentConfig()
+        self.timeline = timeline
+        self.legacy_comment_suppression = 1.0
+        
+        # Legacy PolicyTimeline compatibility adapter
+        if timeline and hasattr(timeline, "get_all_policy_events"):
+            pol_events = timeline.get_all_policy_events()
+            if pol_events:
+                p_first = pol_events[0]
+                self.config.t0 = p_first.timestamp
+                if p_first.impact_factor < 1.0:
+                    if hasattr(p_first, "target_metric") and p_first.target_metric == MetricType.COMMENT:
+                        self.legacy_comment_suppression = p_first.impact_factor
+                    else:
+                        self.config.policy_mechanism = PolicyMechanism.ORIGINALITY_BOOST
+                        self.config.policy_params.originality_weight_shift = (1.0 - p_first.impact_factor) * 3.0
+                    self.legacy_policy_id = p_first.policy_id
+
+        self.py_rng = random.Random(self.config.seed)
+        self.np_rng = np.random.default_rng(self.config.seed)
+
+        self.catalog = catalog or ContentCatalog(
+            num_items=self.config.num_items,
+            seed=self.config.seed,
+        )
+        self.recommender = recommender or RecommendationEngine()
+        self.behavior_model = behavior_model or UserBehaviorModel(rng=self.py_rng)
+
         self.users: List[UserProfile] = []
+        self.treatment_user_hashes: set[str] = set()
+        self.control_user_hashes: set[str] = set()
+
         self._init_user_population()
 
     def _init_user_population(self) -> None:
-        """Instantiates synthetic user population across configured segment proportions."""
+        """Instantiates synthetic user population and assigns A/B treatment/control cohorts."""
         total_users = self.config.num_users
-        proportions = self.config.segment_proportions
-        
-        counts: Dict[UserSegment, int] = {}
-        allocated = 0
-        segments = list(proportions.keys())
-        
-        for seg in segments[:-1]:
-            c = int(total_users * proportions[seg])
-            counts[seg] = c
-            allocated += c
-        counts[segments[-1]] = max(0, total_users - allocated)
+        categories = self.catalog.categories
+
+        segments = [UserSegment.CASUAL, UserSegment.REGULAR, UserSegment.HEAVY, UserSegment.CONTENT_FOCUSED]
+        segment_ratios = [0.50, 0.30, 0.10, 0.10]
 
         user_idx = 0
-        for seg, count in counts.items():
+        for seg, ratio in zip(segments, segment_ratios):
+            count = int(total_users * ratio)
             for _ in range(count):
                 u = create_synthetic_user_profile(
                     user_index=user_idx,
                     segment=seg,
-                    available_categories=self.config.categories,
+                    available_categories=categories,
                     rng=self.py_rng,
                 )
                 self.users.append(u)
+
+                # Assign Treatment vs Control cohort based on treatment_ratio
+                if self.py_rng.random() < self.config.treatment_ratio:
+                    self.treatment_user_hashes.add(u.user_hash)
+                else:
+                    self.control_user_hashes.add(u.user_hash)
+
                 user_idx += 1
 
         self.user_weights = np.array([u.activity_weight for u in self.users], dtype=np.float64)
         self.user_weights /= self.user_weights.sum()
 
-    def _diurnal_time_shift(self, event_index: int, total_events: int) -> float:
+    def _evaluate_external_disturbance(self, evt_time: datetime) -> float:
         """
-        Calculates time offset (in seconds) introducing a diurnal (day/night) sinusoidal activity pattern.
+        Calculates time-varying external disturbance factor D_t affecting both treatment and control cohorts.
+        SUTVA assumption: Common time-varying shock affects both cohorts comparably.
         """
-        total_duration_sec = self.config.duration_hours * 3600.0
-        u = (event_index + self.np_rng.uniform(0, 1)) / float(total_events)
-        
-        base_sec = u * total_duration_sec
-        hour_of_day = (base_sec / 3600.0) % 24.0
-        
-        diurnal_factor = 0.3 * math.sin((hour_of_day - 8.0) * math.pi / 12.0)
-        adjusted_sec = max(0.0, min(total_duration_sec, base_sec + diurnal_factor * 1800.0))
-        
-        return adjusted_sec
+        dist = self.config.external_disturbance
+        if dist.disturbance_type == ExternalDisturbanceType.NONE or not dist.onset_time:
+            return 1.0
 
-    def _apply_policy_impacts(
-        self, user: UserProfile, metric: MetricType, category: str, evt_time: datetime
-    ) -> tuple[float, str]:
-        """
-        Evaluates active policy events at evt_time and calculates net impact multiplier and policy_state tag.
-        """
-        active_policies = self.timeline.get_active_policies_at(evt_time)
-        if not active_policies:
-            return 1.0, "pre_policy"
+        onset = dist.onset_time
+        end_time = onset + timedelta(minutes=dist.duration_minutes)
 
-        net_multiplier = 1.0
-        active_policy_ids = []
-
-        for p in active_policies:
-            # Check targeting criteria
-            if p.target_metric and metric != p.target_metric:
-                continue
-            if p.target_segment and user.segment != p.target_segment:
-                continue
-            if p.target_category and category != p.target_category:
-                continue
-            
-            net_multiplier *= p.impact_factor
-            active_policy_ids.append(p.policy_id)
-
-        policy_state_tag = ",".join(active_policy_ids) if active_policy_ids else "post_policy"
-        return net_multiplier, policy_state_tag
+        if onset <= evt_time <= end_time:
+            return dist.magnitude
+        return 1.0
 
     def generate_events(self) -> List[EngagementEvent]:
         """
-        Generates deterministic stream of validated EngagementEvent objects.
+        Generates deterministic stream of validated EngagementEvent objects for Treatment & Control cohorts.
+        Strict Firewall: Emitted events contain ZERO hidden policy parameter state or ground-truth effect sizes.
         """
         events: List[EngagementEvent] = []
-        total_events = self.config.num_events
+        is_fixed_count = self.config.num_events is not None
+        target_event_count = self.config.num_events if is_fixed_count else (self.config.event_rate * 60)
+        
         start_time = self.config.start_time
+        duration_sec = self.config.duration_hours * 3600.0
+        t0 = self.config.t0 or (start_time + timedelta(hours=self.config.duration_hours / 2.0))
 
+        # Generator loop until target event count is met
+        num_impressions = target_event_count * 2
         selected_user_indices = self.np_rng.choice(
-            len(self.users), size=total_events, p=self.user_weights
+            len(self.users), size=num_impressions, p=self.user_weights
         )
 
-        for i in range(total_events):
+        legacy_pid = getattr(self, "legacy_policy_id", "P001")
+
+        for i in range(num_impressions):
+            if is_fixed_count and len(events) >= target_event_count:
+                break
+
             user = self.users[selected_user_indices[i]]
-            
-            metric_types = list(user.metric_weights.keys())
-            metric_probs = list(user.metric_weights.values())
-            selected_metric_str = self.py_rng.choices(metric_types, weights=metric_probs, k=1)[0]
-            metric_enum = MetricType(selected_metric_str)
+            is_treatment = user.user_hash in self.treatment_user_hashes
 
-            if metric_enum == MetricType.SESSION_DURATION:
-                val = float(round(self.np_rng.lognormal(mean=4.5, sigma=0.8), 2))
-                val = max(5.0, val)
-            else:
-                val = 1.0
-
-            if user.preferred_categories and self.py_rng.random() < 0.8:
-                cat = self.py_rng.choice(user.preferred_categories)
-            else:
-                cat = self.py_rng.choice(self.config.categories)
-
-            offset_sec = self._diurnal_time_shift(i, total_events)
+            # Distribute timestamps uniformly across duration_hours for generated events
+            current_count = len(events)
+            progress_ratio = (current_count / float(target_event_count)) if is_fixed_count else (i / float(num_impressions))
+            offset_sec = progress_ratio * duration_sec
             evt_time = start_time + timedelta(seconds=offset_sec)
+            is_post_t0 = evt_time >= t0
 
-            # Evaluate Policy Impacts
-            impact_multiplier, policy_state_tag = self._apply_policy_impacts(
-                user=user, metric=metric_enum, category=cat, evt_time=evt_time
+            # 1. Fetch candidate items from catalog
+            candidates = self.catalog.get_candidate_items(count=15)
+
+            # 2. Recommendation Engine scores and ranks candidate items
+            # Treatment cohort ranking weights shift post-T0; Control cohort is preserved (SUTVA no-interference)
+            recommended_items = self.recommender.rank_candidates(
+                user=user,
+                candidates=candidates,
+                is_treatment=is_treatment,
+                is_post_t0=is_post_t0,
+                mechanism=self.config.policy_mechanism,
+                params=self.config.policy_params,
+                top_k=1,
             )
+            top_item = recommended_items[0]
 
-            # Apply policy degradation / modifier to event value
-            # If stochastic drop applied (e.g. 20% drop), skip event with probability (1 - impact_multiplier) if impact < 1
-            if impact_multiplier < 1.0 and self.py_rng.random() > impact_multiplier:
-                continue  # Event suppressed due to policy degradation!
+            # 3. User Behavioral Emergence (Watch Completion -> Engagement)
+            outcome = self.behavior_model.process_impression(user=user, item=top_item, rng=self.py_rng)
 
-            val = val * (impact_multiplier if impact_multiplier >= 1.0 else 1.0)
+            # 4. Apply external time-varying disturbance D_t (affects treatment & control comparably)
+            dist_multiplier = self._evaluate_external_disturbance(evt_time)
+            if dist_multiplier < 1.0 and self.py_rng.random() > dist_multiplier:
+                continue  # Suppressed by external disturbance shock
 
-            raw_dict = {
-                "event_id": f"evt_{i+1:08d}",
-                "user_hash": user.user_hash,
-                "metric_type": metric_enum.value,
-                "value": val,
-                "timestamp": evt_time.isoformat(),
-                "content_category": cat,
-                "segment_metadata": {
-                    "user_segment": user.segment.value,
-                },
-                "policy_state": policy_state_tag,
-            }
+            # 5. Emit anonymized events for generated user actions
+            cohort_tag = "treatment" if is_treatment else "control"
+            policy_state_str = legacy_pid if (is_post_t0 and self.timeline) else "pre_policy"
 
-            event = EventValidator.validate_and_parse(raw_dict)
-            events.append(event)
+            # Always emit View
+            events.append(
+                EventValidator.validate_and_parse({
+                    "event_id": f"evt_{len(events)+1:08d}",
+                    "user_hash": user.user_hash,
+                    "metric_type": MetricType.VIEW.value,
+                    "value": 1.0,
+                    "timestamp": evt_time.isoformat(),
+                    "content_category": top_item.category,
+                    "segment_metadata": {"user_segment": user.segment.value, "cohort": cohort_tag},
+                    "policy_state": policy_state_str,
+                })
+            )
+            if is_fixed_count and len(events) >= target_event_count:
+                break
+
+            if outcome.liked:
+                events.append(
+                    EventValidator.validate_and_parse({
+                        "event_id": f"evt_{len(events)+1:08d}",
+                        "user_hash": user.user_hash,
+                        "metric_type": MetricType.LIKE.value,
+                        "value": 1.0,
+                        "timestamp": evt_time.isoformat(),
+                        "content_category": top_item.category,
+                        "segment_metadata": {"user_segment": user.segment.value, "cohort": cohort_tag},
+                        "policy_state": policy_state_str,
+                    })
+                )
+                if is_fixed_count and len(events) >= target_event_count:
+                    break
+
+            if outcome.commented:
+                # Apply legacy comment suppression adapter if active
+                if is_post_t0 and self.legacy_comment_suppression < 1.0:
+                    if self.py_rng.random() > self.legacy_comment_suppression:
+                        pass
+                    else:
+                        events.append(
+                            EventValidator.validate_and_parse({
+                                "event_id": f"evt_{len(events)+1:08d}",
+                                "user_hash": user.user_hash,
+                                "metric_type": MetricType.COMMENT.value,
+                                "value": 1.0,
+                                "timestamp": evt_time.isoformat(),
+                                "content_category": top_item.category,
+                                "segment_metadata": {"user_segment": user.segment.value, "cohort": cohort_tag},
+                                "policy_state": policy_state_str,
+                            })
+                        )
+                else:
+                    events.append(
+                        EventValidator.validate_and_parse({
+                            "event_id": f"evt_{len(events)+1:08d}",
+                            "user_hash": user.user_hash,
+                            "metric_type": MetricType.COMMENT.value,
+                            "value": 1.0,
+                            "timestamp": evt_time.isoformat(),
+                            "content_category": top_item.category,
+                            "segment_metadata": {"user_segment": user.segment.value, "cohort": cohort_tag},
+                            "policy_state": policy_state_str,
+                        })
+                    )
+                if is_fixed_count and len(events) >= target_event_count:
+                    break
+
+            if outcome.shared:
+                events.append(
+                    EventValidator.validate_and_parse({
+                        "event_id": f"evt_{len(events)+1:08d}",
+                        "user_hash": user.user_hash,
+                        "metric_type": MetricType.SHARE.value,
+                        "value": 1.0,
+                        "timestamp": evt_time.isoformat(),
+                        "content_category": top_item.category,
+                        "segment_metadata": {"user_segment": user.segment.value, "cohort": cohort_tag},
+                        "policy_state": policy_state_str,
+                    })
+                )
+                if is_fixed_count and len(events) >= target_event_count:
+                    break
+
+            if outcome.clicked:
+                events.append(
+                    EventValidator.validate_and_parse({
+                        "event_id": f"evt_{len(events)+1:08d}",
+                        "user_hash": user.user_hash,
+                        "metric_type": MetricType.CLICK.value,
+                        "value": 1.0,
+                        "timestamp": evt_time.isoformat(),
+                        "content_category": top_item.category,
+                        "segment_metadata": {"user_segment": user.segment.value, "cohort": cohort_tag},
+                        "policy_state": policy_state_str,
+                    })
+                )
+                if is_fixed_count and len(events) >= target_event_count:
+                    break
+
+            # Emit Session Duration
+            events.append(
+                EventValidator.validate_and_parse({
+                    "event_id": f"evt_{len(events)+1:08d}",
+                    "user_hash": user.user_hash,
+                    "metric_type": MetricType.SESSION_DURATION.value,
+                    "value": outcome.watch_time_seconds,
+                    "timestamp": evt_time.isoformat(),
+                    "content_category": top_item.category,
+                    "segment_metadata": {"user_segment": user.segment.value, "cohort": cohort_tag},
+                    "policy_state": policy_state_str,
+                })
+            )
+            if is_fixed_count and len(events) >= target_event_count:
+                break
 
         events.sort(key=lambda e: e.timestamp)
-        return events
+        return events[:target_event_count] if is_fixed_count else events

@@ -1,89 +1,63 @@
 import React from 'react';
-import { ShieldCheck, Activity, Database, FileText } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { ShieldCheck, RefreshCw } from 'lucide-react';
 
-export const Header: React.FC = () => {
-  const location = useLocation();
+interface HeaderProps {
+  activePillarTab: string;
+  isSimulating: boolean;
+  onRefresh: () => void;
+}
 
-  const navItems = [
-    { label: 'System Health', path: '/', icon: Activity },
-    { label: 'Architecture', path: '/docs/architecture', icon: Database },
-    { label: 'Roadmap', path: '/docs/roadmap', icon: FileText },
-  ];
+export const Header: React.FC<HeaderProps> = ({ activePillarTab, onRefresh }) => {
+
+  const getTitle = () => {
+    switch (activePillarTab) {
+      case 'p1':
+        return 'Pillar 1: Micro-Platform Simulator & Scenario Setup';
+      case 'p2':
+        return 'Pillar 2: CAGED Statistical Degradation Detector';
+      case 'p3':
+        return 'Pillar 3: ML Counterfactual Predictor (XGBoost/Ridge)';
+      case 'p4':
+        return 'Pillar 4: Difference-in-Differences (DiD) Causal Analysis';
+      default:
+        return 'CAGED 4-Pillar Analytical Framework & Evaluation Panel';
+    }
+  };
 
   return (
-    <header style={{
-      borderBottom: '1px solid var(--border-color)',
-      background: 'rgba(11, 15, 25, 0.8)',
-      backdropFilter: 'blur(16px)',
-      position: 'sticky',
-      top: 0,
-      zIndex: 100
-    }}>
-      <div style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        padding: '16px 24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        {/* Brand Logo */}
-        <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            boxShadow: 'var(--shadow-glow)'
-          }}>
-            <ShieldCheck size={24} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.02em', color: '#fff' }}>
-              CAGED
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Causal Engagement Analytics
-            </div>
-          </div>
-        </Link>
+    <header className="px-8 py-5 border-b border-slate-800/80 bg-[#090d16]/90 backdrop-blur-md flex flex-wrap items-center justify-between gap-4 sticky top-0 z-10">
+      <div>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-black text-white tracking-tight font-sans">{getTitle()}</h1>
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            Phase 5 + 6 Final Spec
+          </span>
+        </div>
+        <p className="text-xs text-slate-400 mt-1 flex items-center gap-2">
+          <span>Observable Telemetry Aggregations (5-Minute Windows)</span>
+          <span className="text-slate-600">•</span>
+          <span className="text-emerald-400 flex items-center gap-1 font-medium">
+            <ShieldCheck size={13} /> Ground-Truth Firewall Active
+          </span>
+        </p>
+      </div>
 
-        {/* Navigation */}
-        <nav style={{ display: 'flex', gap: '8px' }}>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 14px',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  background: isActive ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-                  border: isActive ? '1px solid var(--border-active)' : '1px solid transparent',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <Icon size={16} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-800 px-3.5 py-2 rounded-xl text-xs text-slate-300 font-mono">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+          <span className="text-slate-400">Backend Status:</span>
+          <span className="text-emerald-400 font-bold">FastAPI Online</span>
+        </div>
+
+        <button
+          onClick={onRefresh}
+          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-lg shadow-blue-600/20 transition-all border border-blue-400/30"
+        >
+          <RefreshCw size={14} className="animate-spin-slow" />
+          <span>Re-Run Active Scenario</span>
+        </button>
       </div>
     </header>
   );
 };
+

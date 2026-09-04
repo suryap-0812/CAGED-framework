@@ -14,6 +14,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.metrics import router as metrics_router
 from app.api.routes.policies import router as policies_router
 from app.api.routes.stream import router as stream_router
+from app.api.routes.phase5 import router as phase5_router
 from app.config import settings
 from app.core.exceptions import CAGEDException, caged_exception_handler
 from app.core.logging import get_logger, setup_logging
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(policies_router)
     app.include_router(alerts_reports_sim_router)
     app.include_router(stream_router)
+    app.include_router(phase5_router)
 
     return app
 
